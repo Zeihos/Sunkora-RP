@@ -27,7 +27,15 @@ function defaults(): array {
   ],
  ];
 }
-function dbfile(): string { return dirname(__DIR__).'/data/store.php'; }
+function site_storage_dir(): string {
+ $path=getenv('SUNKORA_SITE_STORAGE_DIR');
+ if(!is_string($path)||$path==='')return dirname(__DIR__).'/data';
+ $dir=realpath($path);$root=realpath(dirname(__DIR__));
+ if($dir===false||!is_dir($dir)||!is_writable($dir))throw new RuntimeException('SUNKORA_SITE_STORAGE_DIR: каталог недоступен');
+ if($root!==false&&($dir===$root||str_starts_with($dir,rtrim($root,DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR)))throw new RuntimeException('Хранилище сайта должно быть вне публичного каталога');
+ return $dir;
+}
+function dbfile(): string { return site_storage_dir().'/store.php'; }
 function parse_store(string $content): array {
  if (str_starts_with($content,SUNKORA_STORE_HEADER)) $content=substr($content,strlen(SUNKORA_STORE_HEADER));
  elseif ($content!=='') throw new RuntimeException('Неверный формат файла хранилища');

@@ -47,10 +47,11 @@ try {
  page_end($state,$user);
 } catch(DomainException $ex){
  $state=read_state();$user=current_user($state);$page=trim((string)($_GET['p']??'home'));$page=$state['installed']?$page:'setup';
- if($_SERVER['REQUEST_METHOD']==='POST'){notice('error',$ex->getMessage());$ref=(string)($_SERVER['HTTP_REFERER']??'');$base=(string)($_SERVER['HTTP_HOST']??'');
-  $script=(string)($_SERVER['SCRIPT_NAME']??'/index.php');$basePath=rtrim(dirname($script),'/').'/';$refPath=(string)parse_url($ref,PHP_URL_PATH);
-  if($ref&&parse_url($ref,PHP_URL_HOST)===$base&&in_array($refPath,[$script,$basePath],true)){header('Location: '.$ref,true,303);exit;}
-  $action=(string)($_POST['action']??'');
+ if($_SERVER['REQUEST_METHOD']==='POST'){notice('error',$ex->getMessage());$script=(string)($_SERVER['SCRIPT_NAME']??'/index.php');
+  $basePath=rtrim(dirname($script),'/').'/';
+  $target=local_return_url((string)($_SERVER['HTTP_REFERER']??''),(string)($_SERVER['HTTP_HOST']??''),[$script,$basePath]);
+  if($target!==null){header('Location: '.$target,true,303);exit;}
+    $action=(string)($_POST['action']??'');
   $fallback=match($action){
    'reply_create','topic_watch','topic_moderate'=>route('topic',['t'=>(string)($_POST['topic']??'')]),
    'topic_create'=>route('new',['f'=>(string)($_POST['board']??'')]),

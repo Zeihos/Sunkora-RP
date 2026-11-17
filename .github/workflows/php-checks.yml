@@ -32,5 +32,9 @@ jobs:
         run: php tools/verify-install-keys.php
       - name: Test private data storage and access rules
         run: php tools/test-storage-security.php
+      - name: Test external site storage
+        run: php tools/test-site-storage.php
+      - name: Test external forum storage and safe redirects
+        run: php tools/test-forum-storage.php
       - name: Verify repository structure and assets
         run: php tools/verify-repository.php
