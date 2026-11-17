@@ -2,8 +2,24 @@
 declare(strict_types=1);
 
 const WIKI_ROOT = __DIR__ . '/..';
-const WIKI_DATA = WIKI_ROOT . '/storage/wiki.json';
-const WIKI_LOCK = WIKI_ROOT . '/storage/.lock';
+// Use a private directory outside the web root on Nginx or other servers.
+// Existing installations keep /storage until deliberately migrated.
+$privateDir = getenv('SUNKORA_WIKI_STORAGE_DIR');
+if (is_string($privateDir) && $privateDir !== '') {
+    $resolved = realpath($privateDir);
+    $publicRoot = realpath(WIKI_ROOT);
+    if ($resolved === false || !is_dir($resolved) || !is_writable($resolved)) {
+        throw new RuntimeException('SUNKORA_WIKI_STORAGE_DIR должен указывать на существующий каталог с правом записи');
+    }
+    if ($publicRoot !== false && ($resolved === $publicRoot || str_starts_with($resolved, rtrim($publicRoot, DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR))) {
+        throw new RuntimeException('Каталог SUNKORA_WIKI_STORAGE_DIR должен находиться вне публичного корня Wiki');
+    }
+    define('WIKI_STORE_DIR', $resolved);
+} else {
+    define('WIKI_STORE_DIR', WIKI_ROOT . '/storage');
+}
+define('WIKI_DATA', WIKI_STORE_DIR . '/wiki.json');
+define('WIKI_LOCK', WIKI_STORE_DIR . '/.lock');
 
 function e(mixed $value): string {
     return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
@@ -206,7 +222,7 @@ function wiki_excerpt(string $text, int $max=155): string {
 
 // Shared IP-based lockout, in addition to the session-specific limit.
 function wiki_login_limit(string $mode): bool {
-    $file = WIKI_ROOT.'/storage/login-limits.json';
+    $file = WIKI_STORE_DIR.'/login-limits.json';
     $handle = fopen($file, 'c+');
     if (!$handle) return false;
     @chmod($file,0600);
