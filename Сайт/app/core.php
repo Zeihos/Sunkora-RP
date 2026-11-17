@@ -44,27 +44,53 @@ function parse_store(string $content): array {
  return array_replace(defaults(),$decoded);
 }
 function store_read(): array {
- $file=dbfile(); if (!is_file($file)) return defaults();
- $f=@fopen($file,'rb'); if (!$f) throw new RuntimeException('Хранилище недоступно');
- try { if (!flock($f,LOCK_SH)) throw new RuntimeException('Хранилище заблокировано');
-  $raw=stream_get_contents($f); flock($f,LOCK_UN);
-  return parse_store((string)$raw);
- } finally { fclose($f); }
+ $file=dbfile(); $dir=dirname($file);
+ $lock=@fopen($dir.'/.store.lock','c');
+ if(!$lock)throw new RuntimeException('Не удалось открыть блокировку хранилища');
+ try {
+  if(!flock($lock,LOCK_SH))throw new RuntimeException('Не удалось заблокировать хранилище');
+  if(!is_file($file))return defaults();
+  $raw=@file_get_contents($file);
+  if(!is_string($raw))throw new RuntimeException('Хранилище недоступно');
+  return parse_store($raw);
+ } finally {flock($lock,LOCK_UN);fclose($lock);}
 }
 function store_change(callable $operation): mixed {
  $file=dbfile(); $dir=dirname($file);
- if (!is_dir($dir) || !is_writable($dir)) throw new RuntimeException('Нет прав записи в каталог data/');
- $f=@fopen($file,'c+b'); if (!$f) throw new RuntimeException('Нет прав записи в data/store.php');
- try { if (!flock($f,LOCK_EX)) throw new RuntimeException('Хранилище занято');
-  rewind($f); $state=parse_store((string)stream_get_contents($f));
+ if(!is_dir($dir)||!is_writable($dir))throw new RuntimeException('Нет прав записи в каталог data/');
+ $lock=@fopen($dir.'/.store.lock','c');
+ if(!$lock)throw new RuntimeException('Не удалось открыть блокировку хранилища');
+ try {
+  if(!flock($lock,LOCK_EX))throw new RuntimeException('Хранилище занято');
+  $raw=is_file($file)?@file_get_contents($file):'';
+  if(!is_string($raw))throw new RuntimeException('Не удалось прочитать базу перед записью');
+  $state=parse_store($raw);
   $result=$operation($state);
   $json=json_encode($state,JSON_UNESCAPED_UNICODE|JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
-  rewind($f); if (!ftruncate($f,0)) throw new RuntimeException('Ошибка записи');
   $payload=SUNKORA_STORE_HEADER.$json."\n";
-  $n=fwrite($f,$payload); if ($n===false || $n!==strlen($payload)) throw new RuntimeException('Неполная запись');
-  fflush($f); @chmod($file,0600); flock($f,LOCK_UN);
+  $temp=@tempnam($dir,'.sunkora-');
+  if($temp===false)throw new RuntimeException('Не удалось создать временный файл базы');
+  try {
+   $written=@file_put_contents($temp,$payload,LOCK_EX);
+   if($written===false||$written!==strlen($payload))throw new RuntimeException('Не удалось полностью сохранить базу');
+   @chmod($temp,0600);
+   if(!@rename($temp,$file))throw new RuntimeException('Не удалось заменить файл базы');
+  } finally {if(is_file($temp))@unlink($temp);}
   return $result;
- } finally { fclose($f); }
+ } finally {flock($lock,LOCK_UN);fclose($lock);}
+}
+/**
+ * Verify Content-Length as a numeric byte count, not the length of its string.
+ * Reject malformed or extremely large header values.
+ */
+function request_body_too_large(mixed $value,int $maxBytes=60000): bool {
+ if($value===null||$value==='')return false;
+ if(!is_scalar($value)||$maxBytes<0)return true;
+ $text=(string)$value;
+ if(!preg_match('/\A[0-9]{1,64}\z/D',$text))return true;
+ $count=ltrim($text,'0');if($count==='')$count='0';
+ $limit=(string)$maxBytes;
+ return strlen($count)>strlen($limit)||(strlen($count)===strlen($limit)&&strcmp($count,$limit)>0);
 }
 function uuid(): string { return bin2hex(random_bytes(12)); }
 function e(mixed $s): string { return htmlspecialchars((string)$s,ENT_QUOTES|ENT_SUBSTITUTE,'UTF-8'); }
