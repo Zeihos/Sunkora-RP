@@ -1,0 +1,43 @@
+name: "Предложить улучшение"
+description: "Идея или новая возможность для SUNKORA ROLEPLAY"
+title: "[Идея] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Предложения приветствуются! Опишите задачу, которую решает ваша идея.
+  - type: dropdown
+    id: component
+    attributes:
+      label: "Для какой части проекта?"
+      options:
+        - "Сайт"
+        - "Форум"
+        - "Wiki"
+        - "Оформление"
+        - "Игровой сервер (планируется)"
+        - "Инфраструктура / GitHub"
+        - "Другое"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: "Что хочется улучшить?"
+      description: "Какую проблему или неудобство решит предложение?"
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: "Предлагаемое решение"
+      description: "Как это должно работать? Можно приложить макет или пример"
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: "Дополнительные материалы"
+      description: "Ссылки, изображения или альтернативные варианты"
+    validations:
+      required: false

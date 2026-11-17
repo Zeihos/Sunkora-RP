@@ -1,0 +1,55 @@
+name: "Сообщить об ошибке"
+description: "Проблема в работе сайта, форума, Wiki или других компонентов SUNKORA"
+title: "[Ошибка] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Спасибо за сообщение! Заполните поля ниже. Не прикладывайте пароли, ключи и личные данные.
+  - type: dropdown
+    id: component
+    attributes:
+      label: "Где возникла проблема?"
+      options:
+        - "Сайт"
+        - "Форум"
+        - "Wiki"
+        - "Оформление"
+        - "Игровой сервер (в разработке)"
+        - "GitHub Actions / сборка"
+        - "Другое"
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: "Описание проблемы"
+      description: "Что именно работает неправильно?"
+      placeholder: "Опишите ошибку своими словами"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: "Как воспроизвести?"
+      description: "Напишите последовательность действий"
+      placeholder: |
+        1. Открыть ...
+        2. Нажать ...
+        3. Получить ошибку ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: "Ожидаемое поведение"
+      description: "Что должно происходить вместо ошибки?"
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: "Окружение и дополнительная информация"
+      description: "Версия PHP, браузер, сервер, скриншоты или логи без секретов"
+    validations:
+      required: false
