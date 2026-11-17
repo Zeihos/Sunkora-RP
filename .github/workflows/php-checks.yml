@@ -1,0 +1,32 @@
+name: PHP security and syntax
+
+on:
+  push:
+    paths:
+      - 'Сайт/**'
+      - 'Форум/**'
+      - 'Вики/**'
+      - 'tools/verify-install-keys.php'
+      - '.github/workflows/php-checks.yml'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  php-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify PHP exists
+        run: php -v
+      - name: Lint all PHP files
+        shell: bash
+        run: |
+          set -euo pipefail
+          find 'Сайт' 'Форум' 'Вики' tools -type f -name '*.php' -print0 |
+            xargs -0 -r -n1 php -l
+      - name: Verify installation secrets fail closed
+        run: php tools/verify-install-keys.php

@@ -1,0 +1,30 @@
+# Local secrets and hosting-specific configuration
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+**/server_config.ini
+**/*secret*.local.php
+**/*credentials*.local.php
+
+# Writable application state: never publish real users or sessions
+/Сайт/data/*
+!/Сайт/data/index.php
+/Форум/storage/*
+!/Форум/storage/index.php
+/Вики/storage/*
+!/Вики/storage/index.php
+/Вики/assets/uploads/*
+!/Вики/assets/uploads/index.php
+
+# Logs, temporary files, compiled artifacts
+*.log
+*.tmp
+*.bak
+*.swp
+*.amx
+__pycache__/
+.pytest_cache/
+.DS_Store
+Thumbs.db
