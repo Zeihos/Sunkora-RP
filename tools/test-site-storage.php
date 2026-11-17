@@ -25,5 +25,6 @@ try {
 } finally {
  putenv('SUNKORA_SITE_STORAGE_DIR');
  foreach(glob($dir.'/*')?:[] as $file)if(is_file($file))unlink($file);
+ @unlink($dir.'/.store.lock');
  rmdir($dir);
 }
