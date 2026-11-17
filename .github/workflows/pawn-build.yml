@@ -1,0 +1,62 @@
+name: Pawn Compile
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'server/**'
+      - '.github/workflows/pawn-build.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check whether the actual server sources are present
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in server/gamemodes/sunkora.pwn server/filterscripts/other.pwn server/BUILD-LINUX.sh; do
+            test -f "$file" || { echo "::error file=$file::Server source missing. Upload the licensed project files first."; exit 2; }
+          done
+      - name: Download official pinned Pawn compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pawnc"
+          curl --fail --location --retry 3 --silent --show-error \
+            'https://github.com/openmultiplayer/compiler/releases/download/v3.10.11/pawnc-3.10.11-linux.tar.gz' \
+            -o "$RUNNER_TEMP/pawnc.tar.gz"
+          tar -xzf "$RUNNER_TEMP/pawnc.tar.gz" -C "$RUNNER_TEMP/pawnc"
+          PAWNCC="$(find "$RUNNER_TEMP/pawnc" -type f -name pawncc -print -quit)"
+          test -n "$PAWNCC" || { echo 'PawnCC not found in archive'; exit 3; }
+          chmod +x "$PAWNCC"
+          printf 'PAWNCC=%s\n' "$PAWNCC" >> "$GITHUB_ENV"
+      - name: Compile server
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd server
+          bash BUILD-LINUX.sh
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pawn-compile-logs
+          path: server/logs/compile-*.log
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Upload compiled gamemode
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sunkora-amx
+          path: |
+            server/gamemodes/sunkora.amx
+            server/filterscripts/other.amx
+          if-no-files-found: error
+          retention-days: 14

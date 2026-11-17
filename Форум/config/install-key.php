@@ -1,3 +1,8 @@
 <?php
-/* Ключ нужен только один раз — при создании первого администратора. */
-return 'Y4A9fH1K2DckpR60opI35qOQMub-Z2yhE9366A';
+declare(strict_types=1);
+// Configure on the PHP host, never in the Git repository.
+$key = getenv('SUNKORA_FORUM_INSTALL_KEY');
+if (!is_string($key) || strlen($key) < 32 || strlen($key) > 90) {
+    throw new DomainException('Ключ установки форума не настроен. Задайте SUNKORA_FORUM_INSTALL_KEY (32–90 символов).');
+}
+return $key;
