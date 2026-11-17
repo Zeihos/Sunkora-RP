@@ -14,13 +14,32 @@ function textfield(string $key,int $limit=250): string {
 }
 function valid_name(string $name): bool { return (bool)preg_match('/^[\p{L}\p{N}_-]{3,24}$/u',$name); }
 function route(string $page='home', array $vars=[]): string {return '?'.http_build_query(['p'=>$page]+$vars, '', '&', PHP_QUERY_RFC3986);}
+function local_return_url(string $ref,string $host,array $allow): ?string {
+ if($ref===''||$host==='')return null;
+ $parts=parse_url($ref);$origin=parse_url('http://'.$host);
+ if(!is_array($parts)||!is_array($origin)||empty($origin['host']))return null;
+ if(!in_array(strtolower((string)($parts['scheme']??'')),['http','https'],true))return null;
+ if(!isset($parts['host'])||strcasecmp((string)$parts['host'],(string)$origin['host'])!==0)return null;
+ if(isset($parts['user'])||isset($parts['pass']))return null;
+ $path=(string)($parts['path']??'');$query=(string)($parts['query']??'');
+ if(!in_array($path,$allow,true)||preg_match('/[\x00-\x1f]/',$path.$query))return null;
+ return $path.($query!==''?'?'.$query:'');
+}
 function jump(string $page='home',array $vars=[]): never {header('Location: '.route($page,$vars),true,303);exit;}
 function safeurl(string $s): bool {return $s==='' || (bool)(filter_var($s,FILTER_VALIDATE_URL)&&in_array(parse_url($s,PHP_URL_SCHEME),['https','http'],true));}
 function token(): string {return $_SESSION['csrf']??=bin2hex(random_bytes(32));}
 function csrf_field(): string {return '<input type="hidden" name="csrf" value="'.h(token()).'">';}
 function notice(string $type,string $message): void {$_SESSION['notice']=['type'=>$type,'message'=>$message];}
 function require_csrf(): void {if(!is_string($_POST['csrf']??null)||!hash_equals(token(),$_POST['csrf'])) throw new DomainException('Сессия формы истекла. Обновите страницу.');}
-function storage_path(): string {return BASE_DIR.'/storage/state.php';}
+function forum_storage_dir(): string {
+ $path=getenv('SUNKORA_FORUM_STORAGE_DIR');
+ if(!is_string($path)||$path==='')return BASE_DIR.'/storage';
+ $dir=realpath($path);$root=realpath(BASE_DIR);
+ if($dir===false||!is_dir($dir)||!is_writable($dir))throw new RuntimeException('SUNKORA_FORUM_STORAGE_DIR: каталог недоступен');
+ if($root!==false&&($dir===$root||str_starts_with($dir,rtrim($root,DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR)))throw new RuntimeException('Хранилище форума должно быть вне публичного каталога');
+ return $dir;
+}
+function storage_path(): string {return forum_storage_dir().'/state.php'; }
 function seed_state(): array {
  return [
   'installed'=>false,
@@ -53,7 +72,7 @@ function read_state(): array {
  return is_array($data)?array_replace(seed_state(),$data):seed_state();
 }
 function change_state(callable $work): mixed {
- $dir=BASE_DIR.'/storage'; if(!is_dir($dir)||!is_writable($dir)) throw new RuntimeException('Нет доступа на запись в storage/.');
+ $dir=forum_storage_dir(); if(!is_dir($dir)||!is_writable($dir)) throw new RuntimeException('Нет доступа на запись в storage/.');
  $lock=fopen($dir.'/state.lock','c');if(!$lock||!flock($lock,LOCK_EX))throw new RuntimeException('Не удалось заблокировать хранилище.');
  try {
   $state=read_state(); $result=$work($state);
