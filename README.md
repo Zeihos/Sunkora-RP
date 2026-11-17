@@ -26,7 +26,7 @@
   <a href="https://t.me/sunkora_rp"><img src="https://img.shields.io/badge/Telegram-новости-26A5E4?style=flat-square&amp;logo=telegram&amp;logoColor=white" alt="Telegram"></a>
 </p>
 
-**[О проекте](#о-проекте)** · **[Разделы](#что-в-репозитории)** · **[Установка](#как-запустить-веб-часть)** · **[Разработка](#разработка-и-планы)** · **[Участие](#участие-в-проекте)**
+<p><a href="#о-проекте"><strong>О проекте</strong></a> · <a href="#что-в-репозитории"><strong>Разделы</strong></a> · <a href="#как-запустить-веб-часть"><strong>Установка</strong></a> · <a href="#разработка-и-планы"><strong>Разработка</strong></a> · <a href="#участие-в-проекте"><strong>Участие</strong></a></p>
 
 </div>
 
