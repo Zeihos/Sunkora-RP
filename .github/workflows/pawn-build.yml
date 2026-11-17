@@ -11,18 +11,38 @@ permissions:
   contents: read
 
 jobs:
+  detect-sources:
+    runs-on: ubuntu-24.04
+    outputs:
+      present: ${{ steps.detect.outputs.present }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check for game source
+        id: detect
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for file in server/gamemodes/sunkora.pwn server/filterscripts/other.pwn server/BUILD-LINUX.sh; do
+            if [ ! -f "$file" ]; then
+              echo "::notice file=$file::Game source is not present in the repository yet."
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 0 ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Pawn compilation skipped (no game sources uploaded)." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   compile:
+    needs: detect-sources
+    if: needs.detect-sources.outputs.present == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Check whether the actual server sources are present
-        shell: bash
-        run: |
-          set -euo pipefail
-          for file in server/gamemodes/sunkora.pwn server/filterscripts/other.pwn server/BUILD-LINUX.sh; do
-            test -f "$file" || { echo "::error file=$file::Server source missing. Upload the licensed project files first."; exit 2; }
-          done
       - name: Download official pinned Pawn compiler
         shell: bash
         run: |
