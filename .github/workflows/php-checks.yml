@@ -6,7 +6,7 @@ on:
       - 'Сайт/**'
       - 'Форум/**'
       - 'Вики/**'
-      - 'tools/verify-install-keys.php'
+      - 'tools/**'
       - '.github/workflows/php-checks.yml'
   pull_request:
   workflow_dispatch:
@@ -32,3 +32,5 @@ jobs:
         run: php tools/verify-install-keys.php
       - name: Test private data storage and access rules
         run: php tools/test-storage-security.php
+      - name: Verify repository structure and assets
+        run: php tools/verify-repository.php

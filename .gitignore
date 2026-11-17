@@ -1,4 +1,4 @@
-# Local secrets and hosting-specific configuration
+# Secrets and local hosting configuration
 .env
 .env.*
 !.env.example
@@ -7,24 +7,47 @@
 **/server_config.ini
 **/*secret*.local.php
 **/*credentials*.local.php
+*.key
+*.pem
 
-# Writable application state: never publish real users or sessions
+# Runtime data (preserve tracked Apache protections and indexes)
 /Сайт/data/*
+!/Сайт/data/.htaccess
 !/Сайт/data/index.php
 /Форум/storage/*
+!/Форум/storage/.htaccess
 !/Форум/storage/index.php
 /Вики/storage/*
+!/Вики/storage/.htaccess
 !/Вики/storage/index.php
 /Вики/assets/uploads/*
+!/Вики/assets/uploads/.htaccess
 !/Вики/assets/uploads/index.php
 
-# Logs, temporary files, compiled artifacts
+# Compiled server and generated state
+*.amx
+*.dll
+*.so
+*.sqlite
+*.sqlite3
+*.db
+*.pid
 *.log
 *.tmp
 *.bak
 *.swp
-*.amx
+*.zip
+*.rar
+*.7z
+**/logs/
+**/cache/
+**/vendor/
+**/node_modules/
 __pycache__/
 .pytest_cache/
+
+# IDE / OS
+.vscode/
+.idea/
 .DS_Store
 Thumbs.db
