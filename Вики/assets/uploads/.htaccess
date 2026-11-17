@@ -1,0 +1,5 @@
+# Uploads are public images only; never allow PHP execution here.
+Options -Indexes
+<FilesMatch "\.(?:php[0-9]?|phtml|phar)$">
+    Require all denied
+</FilesMatch>
