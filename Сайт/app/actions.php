@@ -2,7 +2,7 @@
 declare(strict_types=1);
 if ($_SERVER['REQUEST_METHOD']!=='POST') { http_response_code(405); exit; }
 if (!hash_equals(csrf(), (string)($_POST['csrf']??''))) { http_response_code(419); exit('Сессия устарела. Обновите страницу и повторите попытку.'); }
-if (strlen((string)($_SERVER['CONTENT_LENGTH']??0)) > 60000) { http_response_code(413); exit('Слишком большой запрос'); }
+if (request_body_too_large($_SERVER['CONTENT_LENGTH']??null,60000)) { http_response_code(413); exit('Слишком большой запрос'); }
 $action=input('action',48);
 try {
  switch($action) {

@@ -34,6 +34,8 @@ jobs:
         run: php tools/test-storage-security.php
       - name: Test external site storage
         run: php tools/test-site-storage.php
+      - name: Test atomic site writes and POST length limit
+        run: php tools/test-site-reliability.php
       - name: Test external forum storage and safe redirects
         run: php tools/test-forum-storage.php
       - name: Verify repository structure and assets
