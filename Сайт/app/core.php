@@ -115,6 +115,39 @@ function require_login(): void { if (!account()) { flash('error','Войдите
 function require_admin(): void { if (!admin()) { http_response_code(403); flash('error','Нет доступа к панели управления.'); redirect('login'); } }
 function state_settings(array $state): array { return array_replace(defaults()['settings'], $state['settings']??[]); }
 function valid_nick(string $s): bool { return (bool)preg_match('/^[\p{L}\p{N}_-]{3,24}$/u',$s); }
+/**
+ * Normalize account names without altering the nickname shown to visitors.
+ * mbstring supports full Unicode; the fallback handles Russian/Cyrillic
+ * and Latin names on minimal PHP installations.
+ */
+function site_identifier_key(string $value): string {
+ if(function_exists('mb_strtolower'))return mb_strtolower($value,'UTF-8');
+ $upper=preg_split('//u','АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯІЇЄҐЎ',-1,PREG_SPLIT_NO_EMPTY);
+ $lower=preg_split('//u','абвгдеёжзийклмнопрстуфхцчшщъыьэюяіїєґў',-1,PREG_SPLIT_NO_EMPTY);
+ return strtr(strtolower($value),array_combine($upper,$lower));
+}
+function site_user_exists(array $users,string $nickname,string $email): bool {
+ $nickKey=site_identifier_key($nickname);
+ $emailKey=site_identifier_key($email);
+ foreach($users as $user) {
+  if(site_identifier_key((string)($user['username']??''))===$nickKey ||
+     site_identifier_key((string)($user['email']??''))===$emailKey)return true;
+ }
+ return false;
+}
+function site_find_user(array $users,string $identifier): ?array {
+ $key=site_identifier_key($identifier);
+ foreach($users as $user) {
+  if(site_identifier_key((string)($user['username']??''))===$key ||
+     site_identifier_key((string)($user['email']??''))===$key)return $user;
+ }
+ return null;
+}
+function site_require_open_registration(array $state): void {
+ if(empty($state['installed']))throw new DomainException('Сначала установите сайт.');
+ if(empty(state_settings($state)['registration_enabled']))throw new DomainException('Регистрация временно отключена.');
+}
+
 function textlen(string $s): int { return function_exists('mb_strlen') ? mb_strlen($s,'UTF-8') : strlen($s); }
 function clean_url(string $s): string { return ($s==='' || externalUrl($s)) ? $s : ''; }
 function age_limiter(string $key,int $limit,int $window): bool {
