@@ -24,8 +24,7 @@ try {
   session_regenerate_id(true); $_SESSION['uid']=$id; $_SESSION['csrf']=bin2hex(random_bytes(32));
   flash('success','Сайт успешно настроен. Вы вошли как администратор.'); redirect('admin');
  case 'register':
-  if (!store_read()['installed']) throw new DomainException('Сначала установите сайт.');
-  if (!state_settings(store_read())['registration_enabled']) throw new DomainException('Регистрация временно отключена.');
+  site_require_open_registration(store_read());
   if (!age_limiter(ipkey('register'),8,3600)) throw new DomainException('Лимит регистраций. Попробуйте позже.');
   $nick=input('username',55); $email=strtolower(input('email',180)); $pass=(string)($_POST['password']??'');
   if (!valid_nick($nick)) throw new DomainException('Ник должен содержать 3–24 буквы, цифры, дефис или подчёркивание.');
@@ -35,15 +34,16 @@ try {
   if (!isset($_POST['agreement'])) throw new DomainException('Примите условия использования и политику конфиденциальности.');
   $hash=password_hash($pass,PASSWORD_DEFAULT); $id=uuid();
   store_change(function (&$s) use ($nick,$email,$hash,$id) {
-   foreach($s['users'] as $u) if (strtolower((string)$u['username'])===strtolower($nick)||strtolower((string)$u['email'])===$email) throw new DomainException('Ник или электронная почта уже используются.');
+   site_require_open_registration($s);
+   if (site_user_exists($s['users'],$nick,$email)) throw new DomainException('Ник или электронная почта уже используются.');
    $s['users'][]=['id'=>$id,'username'=>$nick,'email'=>$email,'password'=>$hash,'role'=>'player','created'=>date('c'),'blocked'=>false];
   });
   session_regenerate_id(true); $_SESSION['uid']=$id; $_SESSION['csrf']=bin2hex(random_bytes(32));
   flash('success','Аккаунт создан. Добро пожаловать в SUNKORA!'); redirect('account');
  case 'login':
   if (!age_limiter(ipkey('login'),15,900)) throw new DomainException('Слишком много попыток входа. Попробуйте через 15 минут.');
-  $identifier=strtolower(input('identifier',180)); $pass=(string)($_POST['password']??''); $user=null;
-  foreach(store_read()['users'] as $u) if (strtolower((string)$u['username'])===$identifier||strtolower((string)$u['email'])===$identifier) { $user=$u; break; }
+  $identifier=input('identifier',180); $pass=(string)($_POST['password']??'');
+  $user=site_find_user(store_read()['users'],$identifier);
   if (!$user || !password_verify($pass,(string)$user['password'])) throw new DomainException('Неверный логин или пароль.');
   if (!empty($user['blocked'])) throw new DomainException('Доступ к аккаунту ограничен.');
   session_regenerate_id(true); $_SESSION['uid']=$user['id']; $_SESSION['csrf']=bin2hex(random_bytes(32));
