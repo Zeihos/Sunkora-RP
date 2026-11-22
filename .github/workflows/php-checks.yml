@@ -42,5 +42,7 @@ jobs:
         run: php tools/test-forum-storage.php
       - name: Test forum private topics and permission races
         run: php tools/test-forum-privacy.php
+      - name: Test forum authorization on all mutations
+        run: php tools/test-forum-action-auth.php
       - name: Verify repository structure and assets
         run: php tools/verify-repository.php
