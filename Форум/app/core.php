@@ -104,6 +104,15 @@ function forum_actor_for_write(array $state,string $id): array {
  require_user($fresh);
  return $fresh;
 }
+function forum_actor_for_action(array $state,string $id,string $scope='user'): array {
+ $actor=forum_actor_for_write($state,$id);
+ if(!empty($state['settings']['maintenance'])&&!administrator($actor))
+  throw new DomainException('Форум на техническом обслуживании.');
+ if($scope==='staff')require_staff($actor);
+ elseif($scope==='admin')require_admin($actor);
+ elseif($scope!=='user')throw new LogicException('Неизвестный уровень доступа');
+ return $actor;
+}
 function forum_require_registration_open(array $state): void {
  if(empty($state['installed']))throw new DomainException('Сначала завершите установку форума.');
  if(empty($state['settings']['registration']))throw new DomainException('Регистрация временно отключена.');
