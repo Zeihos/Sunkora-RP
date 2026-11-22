@@ -155,14 +155,9 @@ function wiki_post_action(?array $db): never {
         if ($action === 'upload_media') {
             $f=$_FILES['image']??null;
             if (!is_array($f) || (int)($f['error']??99)!==UPLOAD_ERR_OK) throw new DomainException('Не удалось загрузить файл. Проверьте лимит PHP.');
-            if ((int)($f['size']??0)>5*1024*1024 || (int)$f['size']<100) throw new DomainException('Максимальный размер изображения — 5 МБ.');
-            $tmp=(string)$f['tmp_name'];
+            $tmp=(string)($f['tmp_name']??'');
             if (!is_uploaded_file($tmp)) throw new DomainException('Некорректная загрузка.');
-            $info=@getimagesize($tmp);
-            if (!$info || $info[0]>8000 || $info[1]>8000) throw new DomainException('Недопустимое разрешение изображения.');
-            $mime=(new finfo(FILEINFO_MIME_TYPE))->file($tmp);
-            $ext=match($mime) { 'image/jpeg'=>'jpg','image/png'=>'png','image/webp'=>'webp',default=>null };
-            if (!$ext) throw new DomainException('Разрешены только JPEG, PNG и WebP.');
+            $ext=wiki_validate_image_file($tmp,(int)($f['size']??0));
             $filename=bin2hex(random_bytes(16)).'.'.$ext;
             $path=WIKI_ROOT.'/assets/uploads/'.$filename;
             if (!move_uploaded_file($tmp,$path)) throw new RuntimeException('Нет прав записи в assets/uploads/.');

@@ -34,6 +34,8 @@ jobs:
         run: php tools/test-storage-security.php
       - name: Test Wiki admin session revocation
         run: php tools/test-wiki-admin-auth.php
+      - name: Test Wiki uploads and atomic storage writes
+        run: php tools/test-wiki-media-storage.php
       - name: Test external site storage
         run: php tools/test-site-storage.php
       - name: Test atomic site writes and POST length limit
