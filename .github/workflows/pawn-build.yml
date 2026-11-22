@@ -55,6 +55,9 @@ jobs:
           PAWNCC="$(find "$RUNNER_TEMP/pawnc" -type f -name pawncc -print -quit)"
           test -n "$PAWNCC" || { echo 'PawnCC not found in archive'; exit 3; }
           chmod +x "$PAWNCC"
+          LIBPAWNC="$(find "$RUNNER_TEMP/pawnc" -type f -name libpawnc.so -print -quit)"
+          test -n "$LIBPAWNC" || { echo 'libpawnc.so missing in compiler archive'; exit 3; }
+          printf 'LD_LIBRARY_PATH=%s\n' "$(dirname "$LIBPAWNC")" >> "$GITHUB_ENV"
           printf 'PAWNCC=%s\n' "$PAWNCC" >> "$GITHUB_ENV"
       - name: Compile server
         shell: bash
