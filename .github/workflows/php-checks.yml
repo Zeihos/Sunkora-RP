@@ -32,6 +32,8 @@ jobs:
         run: php tools/verify-install-keys.php
       - name: Test private data storage and access rules
         run: php tools/test-storage-security.php
+      - name: Test Wiki admin session revocation
+        run: php tools/test-wiki-admin-auth.php
       - name: Test external site storage
         run: php tools/test-site-storage.php
       - name: Test atomic site writes and POST length limit
