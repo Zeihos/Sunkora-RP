@@ -23,12 +23,12 @@ function dispatch_action(array $initial): never {
    audit($s,$s['users'][$id],'Установлен форум');return $id;
   }); session_regenerate_id(true);$_SESSION['user']=$newId;notice('success','Форум установлен. Вы вошли как владелец.');jump('admin');
  case 'register':
-  if(empty($initial['settings']['registration']))throw new DomainException('Регистрация временно отключена.');
+  forum_require_registration_open($initial);
   $name=textfield('name',24);$password=(string)($_POST['password']??'');$pass2=(string)($_POST['confirm']??'');
   if(!valid_name($name))throw new DomainException('Имя: от 3 до 24 символов; буквы, цифры, _ и -.');
   if(strlen($password)<10 || strlen($password)>128)throw new DomainException('Пароль должен содержать от 10 до 128 символов.');
   if($password!==$pass2)throw new DomainException('Пароли не совпадают.');
-  $newId=change_state(function(&$s)use($name,$password){throttled($s,'register',5,3600);foreach($s['users'] as $existing){if($existing['norm']===lower($name))throw new DomainException('Этот ник уже занят.');}
+  $newId=change_state(function(&$s)use($name,$password){forum_require_registration_open($s);throttled($s,'register',5,3600);foreach($s['users'] as $existing){if($existing['norm']===lower($name))throw new DomainException('Этот ник уже занят.');}
    $id=uid('u-');$s['users'][$id]=['id'=>$id,'name'=>$name,'norm'=>lower($name),'password'=>password_hash($password,PASSWORD_DEFAULT),'role'=>'user','joined'=>now(),'bio'=>'','banned'=>false];return $id;
   });session_regenerate_id(true);$_SESSION['user']=$newId;notice('success','Аккаунт создан! Добро пожаловать на форум.');jump('home');
  case 'login':
@@ -43,7 +43,9 @@ function dispatch_action(array $initial): never {
   require_user($user);$boardId=textfield('board',64);$title=textfield('title',140);$body=textfield('body',12000);
   $board=$initial['boards'][$boardId]??null;if(!$board||!can_write_board($board,$user))throw new DomainException('Нет доступа к публикации в этом разделе.');
   if(txtlen($title)<5||txtlen($body)<15)throw new DomainException('Заголовок — от 5 символов, сообщение — от 15 символов.');
-  $id=change_state(function(&$s)use($user,$boardId,$title,$body){throttled($s,'topics-'.$user['id'],8,3600);
+  $id=change_state(function(&$s)use($user,$boardId,$title,$body){
+   $user=forum_assert_board_permission($s,$user['id'],$boardId);
+   throttled($s,'topics-'.$user['id'],8,3600);
    $id=uid('t-');$pid=uid('m-');$date=now();$s['topics'][$id]=['id'=>$id,'board'=>$boardId,'title'=>$title,'author'=>$user['id'],'created'=>$date,'updated'=>$date,'last_author'=>$user['id'],'pinned'=>false,'locked'=>false,'views'=>0];
    $s['posts'][$pid]=['id'=>$pid,'topic'=>$id,'author'=>$user['id'],'body'=>$body,'created'=>$date,'edited'=>null,'deleted'=>false];return $id;
   });notice('success','Тема опубликована.');jump('topic',['t'=>$id]);
@@ -51,6 +53,8 @@ function dispatch_action(array $initial): never {
   require_user($user);$topicId=textfield('topic',64);$body=textfield('body',12000);
   if(txtlen($body)<2)throw new DomainException('Сообщение слишком короткое.');
   $tid=change_state(function(&$s)use($user,$topicId,$body){
+   $user=forum_actor_for_write($s,$user['id']);
+   if(!empty($s['settings']['maintenance'])&&!administrator($user))throw new DomainException('Форум на техническом обслуживании.');
    $t=$s['topics'][$topicId]??null;$b=$t?($s['boards'][$t['board']]??null):null;
    if(!$t||!$b||!can_read_topic($t,$b,$user))throw new DomainException('Тема недоступна.');
    if($t['locked']&&!staff($user))throw new DomainException('Тема закрыта для ответов.');
@@ -76,7 +80,7 @@ function dispatch_action(array $initial): never {
    $s['posts'][$pid]['deleted']=true;audit($s,$user,'Удалил сообщение '.$pid);return $post['topic'];});notice('success','Сообщение удалено.');jump('topic',['t'=>$tid]);
  case 'topic_moderate':
   require_user($user);$tid=textfield('topic',64);$mode=textfield('mode',32);
-  $redir=change_state(function(&$s)use($user,$tid,$mode){$t=$s['topics'][$tid]??null;if(!$t)throw new DomainException('Тема не найдена.');$b=$s['boards'][$t['board']]??null;
+  $redir=change_state(function(&$s)use($user,$tid,$mode){$user=forum_actor_for_write($s,$user['id']);$t=$s['topics'][$tid]??null;if(!$t)throw new DomainException('Тема не найдена.');$b=$s['boards'][$t['board']]??null;
    if(!$b||!can_read_topic($t,$b,$user))throw new DomainException('Нет доступа.');
    if($mode==='delete'){
     if(!staff($user)&&($t['author']!==$user['id']||count(thread_posts($s,$tid))>1))throw new DomainException('Удалять темы с ответами могут только модераторы.');
@@ -85,7 +89,7 @@ function dispatch_action(array $initial): never {
    require_staff($user);
    if($mode==='pin')$s['topics'][$tid]['pinned']=!$t['pinned'];
    elseif($mode==='lock')$s['topics'][$tid]['locked']=!$t['locked'];
-   elseif($mode==='move'){$dest=textfield('destination',64);if(!isset($s['boards'][$dest]))throw new DomainException('Выберите раздел.');$s['topics'][$tid]['board']=$dest;}
+   elseif($mode==='move'){$dest=textfield('destination',64);if(!isset($s['boards'][$dest]))throw new DomainException('Выберите раздел.');forum_assert_move_allowed($b,$s['boards'][$dest]);$s['topics'][$tid]['board']=$dest;}
    else throw new DomainException('Неизвестная команда.');
    audit($s,$user,'Модерация темы '.$tid.' ('.$mode.')');return ['topic',$tid];
   });notice('success','Изменения сохранены.');jump($redir[0],[$redir[0]==='board'?'f':'t'=>$redir[1]]);
@@ -130,7 +134,11 @@ function dispatch_action(array $initial): never {
  case 'admin_board':
   require_admin($user);$id=textfield('id',64);$title=textfield('title',85);$desc=textfield('description',200);$cat=textfield('category',64);$position=(int)($_POST['position']??1);$mode=textfield('mode',16);$icon=textfield('icon',40);
   if(!$title||!in_array($mode,['public','private','staff'],true)||!isset($initial['categories'][$cat]))throw new DomainException('Проверьте название, категорию и режим доступа.');
-  change_state(function(&$s)use($id,$title,$desc,$cat,$position,$mode,$icon,$user){$key=$id?:uid('b-');if($id&&!isset($s['boards'][$id]))throw new DomainException('Раздел не найден.');
+  change_state(function(&$s)use($id,$title,$desc,$cat,$position,$mode,$icon,$user){
+   $actor=forum_actor_for_write($s,$user['id']);require_admin($actor);
+   $key=$id?:uid('b-');if($id&&!isset($s['boards'][$id]))throw new DomainException('Раздел не найден.');
+   if(!isset($s['categories'][$cat]))throw new DomainException('Категория не найдена.');
+   if($id!=='')forum_assert_board_mode_allowed($s,$id,$mode);
    $s['boards'][$key]=['id'=>$key,'title'=>$title,'description'=>$desc,'category'=>$cat,'position'=>max(1,min(500,$position)),'mode'=>$mode,'icon'=>preg_match('/^[a-z-]{2,40}$/',$icon)?$icon:'message-square','staff_post'=>isset($_POST['staff_post'])];audit($s,$user,'Изменил раздел '.$key);});notice('success','Раздел сохранён.');jump('admin',['tab'=>'boards']);
  case 'admin_remove':
   require_admin($user);$kind=textfield('kind',20);$id=textfield('id',64);
