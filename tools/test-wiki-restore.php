@@ -99,7 +99,7 @@ try {
     $actions=file_get_contents($root.'/Вики/app/actions.php');
     $assert(str_contains($ui,'name="restore_confirmation"'),'UI asks for confirmation');
     $assert(str_contains($ui,'name="current_password"'),'UI asks for current password');
-    $assert(str_contains($actions,"if ($action === 'restore_backup')"),'web restore action connected');
+    $assert(str_contains($actions,'if ($action === \'restore_backup\')'),'web restore action connected');
     $assert(str_contains($actions,'is_uploaded_file($tmp)'),'backup upload verification');
     echo "OK: $count Wiki restore, rollback and validation assertions\n";
 } finally {
