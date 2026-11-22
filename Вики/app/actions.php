@@ -31,14 +31,16 @@ function wiki_post_action(?array $db): never {
             $fail=$_SESSION['wiki_login_fails'] ?? ['count'=>0,'from'=>time()];
             if (time()-(int)($fail['from']??0)>900) $fail=['count'=>0,'from'=>time()];
             if ((int)$fail['count']>=6 || !wiki_login_limit('check')) throw new DomainException('Слишком много попыток входа. Повторите через 15 минут.');
+            $currentDb=wiki_read();
+            if (!isset($currentDb['admin']['email'],$currentDb['admin']['password_hash'])) throw new DomainException('Сначала установите Wiki.');
             $mail=trim(strtolower((string)($_POST['email']??'')));
             $pass=(string)($_POST['password']??'');
-            if (!hash_equals($db['admin']['email'], $mail) || !password_verify($pass,$db['admin']['password_hash'])) {
+            if (!hash_equals((string)$currentDb['admin']['email'], $mail) || !password_verify($pass,(string)$currentDb['admin']['password_hash'])) {
                 $fail['count']++; $_SESSION['wiki_login_fails']=$fail; wiki_login_limit('failure');
                 throw new DomainException('Неверная почта или пароль.');
             }
             unset($_SESSION['wiki_login_fails']); wiki_login_limit('clear');
-            session_regenerate_id(true);$_SESSION['wiki_admin']=true;$_SESSION['wiki_auth_version']=hash('sha256',$db['admin']['password_hash']);
+            session_regenerate_id(true);$_SESSION['wiki_admin']=true;$_SESSION['wiki_auth_version']=hash('sha256',$currentDb['admin']['password_hash']);
             wiki_flash('success','Вы вошли в панель управления.');wiki_redirect(['page'=>'admin']);
         }
         if ($action === 'logout') {
@@ -71,7 +73,7 @@ function wiki_post_action(?array $db): never {
             if (wiki_length($name)<2 || wiki_length($name)>80) throw new DomainException('Название категории: от 2 до 80 символов.');
             if (wiki_length($desc)>200) throw new DomainException('Описание слишком длинное.');
             if (wiki_length($icon)>8) throw new DomainException('Укажите один короткий значок или emoji.');
-            wiki_change(function(&$data) use ($id,$name,$desc,$icon,$sort) {
+            wiki_admin_change(function(&$data) use ($id,$name,$desc,$icon,$sort) {
                 if ($id) {
                     foreach ($data['categories'] as &$c) if ($c['id']===$id) {
                         $c['name']=$name; $c['description']=$desc; $c['icon']=$icon; $c['sort']=$sort; return;
@@ -84,7 +86,7 @@ function wiki_post_action(?array $db): never {
         }
         if ($action === 'delete_category') {
             $id=(int)($_POST['id']??0);
-            wiki_change(function(&$data) use ($id) {
+            wiki_admin_change(function(&$data) use ($id) {
                 foreach ($data['articles'] as $a) if ($a['category_id']===$id) throw new DomainException('Сначала перенесите или удалите статьи из категории.');
                 if (!wiki_find($data['categories'],$id)) throw new DomainException('Категория не найдена.');
                 $data['categories']=array_values(array_filter($data['categories'],fn($c)=>$c['id']!==$id));
@@ -101,7 +103,7 @@ function wiki_post_action(?array $db): never {
             if (wiki_length($title)<3 || wiki_length($title)>140) throw new DomainException('Заголовок: 3–140 символов.');
             if (wiki_length($summary)>280) throw new DomainException('Краткое описание: не более 280 символов.');
             if (wiki_length($body)<10 || strlen($body)>320000) throw new DomainException('Текст статьи должен содержать не менее 10 символов.');
-            wiki_change(function(&$data) use ($id,$cat,$title,$summary,$body,$status,$featured) {
+            wiki_admin_change(function(&$data) use ($id,$cat,$title,$summary,$body,$status,$featured) {
                 if (!wiki_find($data['categories'],$cat)) throw new DomainException('Выберите существующую категорию.');
                 if ($id) {
                     foreach ($data['articles'] as &$a) if ($a['id']===$id) {
@@ -115,7 +117,7 @@ function wiki_post_action(?array $db): never {
         }
         if ($action === 'delete_article') {
             $id=(int)($_POST['id']??0);
-            wiki_change(function(&$data) use ($id) {
+            wiki_admin_change(function(&$data) use ($id) {
                 if (!wiki_find($data['articles'],$id)) throw new DomainException('Статья не найдена.');
                 $data['articles']=array_values(array_filter($data['articles'],fn($a)=>$a['id']!==$id));
             });
@@ -135,16 +137,19 @@ function wiki_post_action(?array $db): never {
             $email=trim((string)($_POST['support_email']??''));
             if ($email!=='' && (!filter_var($email,FILTER_VALIDATE_EMAIL) || strlen($email)>150)) throw new DomainException('Некорректная почта поддержки.');
             $values['support_email']=$email;$values['maintenance']=isset($_POST['maintenance']);
-            wiki_change(function(&$data) use ($values) { $data['settings']=array_merge($data['settings'],$values); });
+            wiki_admin_change(function(&$data) use ($values) { $data['settings']=array_merge($data['settings'],$values); });
             wiki_flash('success','Настройки сохранены.');wiki_redirect(['page'=>'admin','tab'=>'settings']);
         }
         if ($action === 'change_password') {
             $old=(string)($_POST['old_password']??'');$new=(string)($_POST['new_password']??'');
-            if (!password_verify($old,$db['admin']['password_hash'])) throw new DomainException('Неверный текущий пароль.');
             if (strlen($new)<12 || strlen($new)>200) throw new DomainException('Новый пароль должен содержать 12–200 символов.');
             if (!hash_equals($new,(string)($_POST['confirm_password']??''))) throw new DomainException('Пароли не совпадают.');
             $hash=password_hash($new,PASSWORD_DEFAULT);
-            wiki_change(function(&$data) use ($hash) { $data['admin']['password_hash']=$hash; });
+            wiki_admin_change(function(&$data) use ($old,$hash) {
+                if (!password_verify($old,(string)($data['admin']['password_hash']??'')))
+                    throw new DomainException('Текущий пароль изменился. Повторите операцию.');
+                $data['admin']['password_hash']=$hash;
+            });
             session_regenerate_id(true);$_SESSION['wiki_auth_version']=hash('sha256',$hash);wiki_flash('success','Пароль администратора изменён.');wiki_redirect(['page'=>'admin','tab'=>'security']);
         }
         if ($action === 'upload_media') {
@@ -163,7 +168,7 @@ function wiki_post_action(?array $db): never {
             if (!move_uploaded_file($tmp,$path)) throw new RuntimeException('Нет прав записи в assets/uploads/.');
             @chmod($path,0644);
             try {
-                wiki_change(function(&$data) use ($filename,$f) {
+                wiki_admin_change(function(&$data) use ($filename,$f) {
                     $data['media'][]=['id'=>wiki_next_id($data['media']),'filename'=>$filename,'title'=>clean_text(pathinfo((string)$f['name'],PATHINFO_FILENAME),100),'created_at'=>wiki_now()];
                 });
             } catch(Throwable $ex) { @unlink($path); throw $ex; }
@@ -171,15 +176,22 @@ function wiki_post_action(?array $db): never {
         }
         if ($action === 'delete_media') {
             $id=(int)($_POST['id']??0);
-            $found=wiki_find($db['media'],$id);
-            if (!$found) throw new DomainException('Файл не найден.');
-            foreach ($db['articles'] as $a) if (str_contains($a['content'],$found['filename'])) throw new DomainException('Изображение используется в статье. Сначала удалите ссылку на него.');
-            wiki_change(function(&$data) use ($id) { $data['media']=array_values(array_filter($data['media'],fn($m)=>$m['id']!==$id)); });
-            @unlink(WIKI_ROOT.'/assets/uploads/'.basename($found['filename']));
+            $filename=wiki_admin_change(function(&$data) use ($id) {
+                $found=wiki_find($data['media'],$id);
+                if (!$found) throw new DomainException('Файл не найден.');
+                foreach ($data['articles'] as $article)
+                    if (str_contains((string)$article['content'],(string)$found['filename']))
+                        throw new DomainException('Изображение используется в статье. Сначала удалите ссылку на него.');
+                $data['media']=array_values(array_filter($data['media'],fn($m)=>$m['id']!==$id));
+                return basename((string)$found['filename']);
+            });
+            @unlink(WIKI_ROOT.'/assets/uploads/'.$filename);
             wiki_flash('success','Изображение удалено.');wiki_redirect(['page'=>'admin','tab'=>'media']);
         }
         if ($action === 'backup') {
-            $json=json_encode($db,JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            $snapshot=wiki_read();
+            wiki_assert_admin_state($snapshot);
+            $json=json_encode($snapshot,JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
             header('Content-Type: application/json; charset=utf-8');
             header('Content-Disposition: attachment; filename="sunkora-wiki-backup-'.gmdate('Y-m-d').'.json"');
             header('Cache-Control: no-store, private');

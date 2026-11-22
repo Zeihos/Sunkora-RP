@@ -85,6 +85,8 @@ function wiki_start_session(): void {
     $script = (string)($_SERVER['SCRIPT_NAME'] ?? '/index.php');
     $dir = str_replace('\\', '/', dirname($script));
     $path = ($dir === '/' || $dir === '.') ? '/' : rtrim($dir, '/') . '/';
+    ini_set('session.use_strict_mode','1');
+    ini_set('session.use_only_cookies','1');
     session_name('SUNKORA_WIKI');
     session_set_cookie_params(['lifetime'=>0, 'path'=>$path, 'secure'=>$https, 'httponly'=>true, 'samesite'=>'Lax']);
     session_start();
@@ -100,6 +102,19 @@ function wiki_check_csrf(): void {
 function wiki_admin(): bool { return !empty($_SESSION['wiki_admin']); }
 function wiki_require_admin(): void {
     if (!wiki_admin()) { http_response_code(403); exit('Нет доступа'); }
+}
+function wiki_assert_admin_state(?array $state): void {
+    $hash=$state['admin']['password_hash']??null;
+    $version=$_SESSION['wiki_auth_version']??null;
+    if (!wiki_admin() || !is_string($hash) || $hash==='' || !is_string($version) ||
+        !hash_equals(hash('sha256',$hash),$version))
+        throw new DomainException('Сессия администратора устарела. Войдите заново.');
+}
+function wiki_admin_change(callable $callback): mixed {
+    return wiki_change(function (&$data) use ($callback) {
+        wiki_assert_admin_state($data);
+        return $callback($data);
+    });
 }
 function wiki_flash(string $type, string $message): void {
     $_SESSION['flash'] = ['type'=>$type, 'message'=>$message];
