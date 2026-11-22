@@ -85,19 +85,19 @@ try{
  $source=file_get_contents($root.'/Форум/app/actions.php');
  if(!is_string($source))throw new RuntimeException('Missing forum actions');
  $scopes=[
-  'post_edit'=>"forum_actor_for_action($s,$user['id'])",
-  'post_delete'=>"forum_actor_for_action($s,$user['id'])",
-  'topic_watch'=>"forum_actor_for_action($s,$user['id'])",
-  'report'=>"forum_actor_for_action($s,$user['id'])",
-  'report_resolve'=>"forum_actor_for_action($s,$user['id'],'staff')",
-  'notify_read'=>"forum_actor_for_action($s,$user['id'])",
-  'profile_save'=>"forum_actor_for_action($s,$user['id'])",
-  'password_change'=>"forum_actor_for_action($s,$user['id'])",
-  'admin_settings'=>"forum_actor_for_action($s,$user['id'],'admin')",
-  'admin_category'=>"forum_actor_for_action($s,$user['id'],'admin')",
-  'admin_board'=>"forum_actor_for_action($s,$user['id'],'admin')",
-  'admin_remove'=>"forum_actor_for_action($s,$user['id'],'admin')",
-  'admin_user'=>"forum_actor_for_action($s,$user['id'],'admin')"
+  'post_edit'=>"forum_actor_for_action(",
+  'post_delete'=>"forum_actor_for_action(",
+  'topic_watch'=>"forum_actor_for_action(",
+  'report'=>"forum_actor_for_action(",
+  'report_resolve'=>"forum_actor_for_action(",
+  'notify_read'=>"forum_actor_for_action(",
+  'profile_save'=>"forum_actor_for_action(",
+  'password_change'=>"forum_actor_for_action(",
+  'admin_settings'=>"forum_actor_for_action(",
+  'admin_category'=>"forum_actor_for_action(",
+  'admin_board'=>"forum_actor_for_action(",
+  'admin_remove'=>"forum_actor_for_action(",
+  'admin_user'=>"forum_actor_for_action("
  ];
  foreach($scopes as $name=>$needle){
   $from=strpos($source,"case '".$name."':");
