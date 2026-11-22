@@ -1,5 +1,6 @@
 // SUNKORA ROLEPLAY: original minimal development game mode (not the full RP mod).
 #pragma semicolon 1
+#pragma rational Float
 #define SUNKORA_MAX_PLAYERS 1000
 #define COLOR_WHITE 0xEEEEEEFF
 #define COLOR_ACCENT 0xC4A2FFFF
