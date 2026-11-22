@@ -47,11 +47,11 @@ function wiki_date(?string $date): string {
     catch (Throwable) { return ''; }
 }
 function wiki_read(): ?array {
-    if (!is_file(WIKI_DATA)) return null;
     $lock = fopen(WIKI_LOCK, 'c');
     if (!$lock) throw new RuntimeException('Не удалось открыть блокировку хранилища');
     try {
         if (!flock($lock, LOCK_SH)) throw new RuntimeException('Не удалось заблокировать хранилище');
+        if (!is_file(WIKI_DATA)) return null;
         $raw = file_get_contents(WIKI_DATA);
         $data = is_string($raw) ? json_decode($raw, true) : null;
         if (!is_array($data)) throw new RuntimeException('Файл данных повреждён; восстановите резервную копию');
@@ -72,12 +72,44 @@ function wiki_change(callable $callback): mixed {
         $tmp = tempnam(dirname(WIKI_DATA), '.wiki-');
         if ($tmp === false) throw new RuntimeException('Нет прав записи в storage/');
         try {
-            if (file_put_contents($tmp, $json . "\n") === false) throw new RuntimeException('Не удалось записать данные');
+            $payload = $json . "\n";
+            $written = @file_put_contents($tmp, $payload, LOCK_EX);
+            if ($written === false || $written !== strlen($payload)) throw new RuntimeException('Не удалось полностью записать данные');
             @chmod($tmp, 0600);
             if (!rename($tmp, WIKI_DATA)) throw new RuntimeException('Не удалось обновить базу данных');
         } finally { if (is_file($tmp)) @unlink($tmp); }
         return $result;
     } finally { flock($lock, LOCK_UN); fclose($lock); }
+}
+/**
+ * Validate both the real size and the decoded image header before publishing.
+ * Callers must also require is_uploaded_file() for HTTP upload requests.
+ * Returns the trusted filename extension, never the user-supplied extension.
+ */
+function wiki_validate_image_file(string $path, int $declaredSize): string {
+    $actualSize=@filesize($path);
+    if ($actualSize===false || $actualSize<100 || $actualSize>5*1024*1024 ||
+        $declaredSize!==$actualSize) {
+        throw new DomainException('Размер изображения не соответствует требованиям (100 байт — 5 МБ).');
+    }
+    $info=@getimagesize($path);
+    if (!is_array($info) || !isset($info[0],$info[1],$info[2])) {
+        throw new DomainException('Файл не является поддерживаемым изображением.');
+    }
+    $width=(int)$info[0]; $height=(int)$info[1];
+    if ($width<1 || $height<1 || $width>8000 || $height>8000 || $width*$height>32000000) {
+        throw new DomainException('Недопустимое разрешение изображения.');
+    }
+    $mime=(new finfo(FILEINFO_MIME_TYPE))->file($path);
+    $formats=[
+        'image/jpeg'=>[IMAGETYPE_JPEG,'jpg'],
+        'image/png'=>[IMAGETYPE_PNG,'png'],
+        'image/webp'=>[IMAGETYPE_WEBP,'webp']
+    ];
+    if (!is_string($mime) || !isset($formats[$mime]) || (int)$info[2]!==$formats[$mime][0]) {
+        throw new DomainException('Разрешены только JPEG, PNG и WebP.');
+    }
+    return $formats[$mime][1];
 }
 function wiki_start_session(): void {
     if (session_status() === PHP_SESSION_ACTIVE) return;
