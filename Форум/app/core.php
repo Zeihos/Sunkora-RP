@@ -98,6 +98,35 @@ function can_read_topic(array $topic, array $board,?array $user): bool {
 }
 function can_write_board(array $board,?array $user): bool {return $user&&!($user['banned']??false)&&can_read_board($board,$user)&&(!($board['staff_post']??false)||staff($user));}
 function can_edit_post(array $post,?array $user): bool {return $user && !(bool)($user['banned']??false) && (staff($user)||($post['author']??'')===$user['id']);}
+function forum_actor_for_write(array $state,string $id): array {
+ $fresh=$state['users'][$id]??null;
+ if(!is_array($fresh))throw new DomainException('Аккаунт не найден. Войдите заново.');
+ require_user($fresh);
+ return $fresh;
+}
+function forum_require_registration_open(array $state): void {
+ if(empty($state['installed']))throw new DomainException('Сначала завершите установку форума.');
+ if(empty($state['settings']['registration']))throw new DomainException('Регистрация временно отключена.');
+ if(!empty($state['settings']['maintenance']))throw new DomainException('Форум на техническом обслуживании.');
+}
+function forum_assert_board_permission(array $state,string $id,string $boardId): array {
+ $actor=forum_actor_for_write($state,$id);
+ if(!empty($state['settings']['maintenance'])&&!administrator($actor))throw new DomainException('Форум на техническом обслуживании.');
+ $board=$state['boards'][$boardId]??null;
+ if(!is_array($board)||!can_write_board($board,$actor))throw new DomainException('Нет доступа к публикации в этом разделе.');
+ return $actor;
+}
+function forum_assert_move_allowed(array $source,array $destination): void {
+ if(($source['mode']??'public')!==($destination['mode']??'public'))
+  throw new DomainException('Нельзя переносить тему между разделами с разным режимом доступа.');
+}
+function forum_assert_board_mode_allowed(array $state,string $boardId,string $newMode): void {
+ $existing=$state['boards'][$boardId]??null;
+ if(!is_array($existing)||($existing['mode']??'public')===$newMode)return;
+ foreach($state['topics'] as $topic)
+  if(($topic['board']??'')===$boardId)
+   throw new DomainException('Нельзя менять режим раздела, пока он содержит темы.');
+}
 function ordered_boards(array $state,string $cat): array {
  $result=array_values(array_filter($state['boards'],fn($b)=>$b['category']===$cat));usort($result,fn($a,$b)=>($a['position']<=>$b['position'])?:strcmp($a['title'],$b['title']));return $result;
 }

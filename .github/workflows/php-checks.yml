@@ -40,5 +40,7 @@ jobs:
         run: php tools/test-site-accounts.php
       - name: Test external forum storage and safe redirects
         run: php tools/test-forum-storage.php
+      - name: Test forum private topics and permission races
+        run: php tools/test-forum-privacy.php
       - name: Verify repository structure and assets
         run: php tools/verify-repository.php
