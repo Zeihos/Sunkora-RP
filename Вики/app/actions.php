@@ -183,6 +183,25 @@ function wiki_post_action(?array $db): never {
             @unlink(WIKI_ROOT.'/assets/uploads/'.$filename);
             wiki_flash('success','Изображение удалено.');wiki_redirect(['page'=>'admin','tab'=>'media']);
         }
+        if ($action === 'restore_backup') {
+            if (($_POST['restore_confirmation']??'')!=='ВОССТАНОВИТЬ')
+                throw new DomainException('Введите слово ВОССТАНОВИТЬ для подтверждения.');
+            $file=$_FILES['backup_file']??null;
+            if (!is_array($file) || (int)($file['error']??99)!==UPLOAD_ERR_OK)
+                throw new DomainException('Выберите JSON-файл резервной копии (до 6 МБ).');
+            $tmp=(string)($file['tmp_name']??'');
+            if (!is_uploaded_file($tmp))throw new DomainException('Некорректная загрузка резервной копии.');
+            $actual=@filesize($tmp);
+            if ($actual===false || $actual<100 || $actual>6*1024*1024 ||
+                (int)($file['size']??0)!==$actual)
+                throw new DomainException('Некорректный размер резервной копии (максимум 6 МБ).');
+            $json=@file_get_contents($tmp);
+            if (!is_string($json) || strlen($json)!==$actual)
+                throw new DomainException('Не удалось полностью прочитать резервную копию.');
+            $previous=wiki_restore_from_json($json,(string)($_POST['current_password']??''));
+            wiki_flash('success','Данные восстановлены. Предыдущая база сохранена в закрытом хранилище: '.$previous);
+            wiki_redirect(['page'=>'admin','tab'=>'backup']);
+        }
         if ($action === 'backup') {
             $snapshot=wiki_read();
             wiki_assert_admin_state($snapshot);

@@ -111,6 +111,132 @@ function wiki_validate_image_file(string $path, int $declaredSize): string {
     }
     return $formats[$mime][1];
 }
+
+/**
+ * Read only backup files compatible with this Wiki schema.
+ * Administrator credentials from the archive are deliberately never restored.
+ */
+function wiki_validate_restore_json(string $json): array {
+    if (strlen($json)<100 || strlen($json)>6*1024*1024)
+        throw new DomainException('Размер резервной копии должен быть не более 6 МБ.');
+    try {
+        $db=json_decode($json,true,64,JSON_THROW_ON_ERROR);
+    } catch(JsonException $exception) {
+        throw new DomainException('Некорректный JSON-файл резервной копии.',0,$exception);
+    }
+    if (!is_array($db) || array_is_list($db) || ($db['version']??null)!==1 ||
+        !isset($db['admin']['email'],$db['admin']['password_hash']) ||
+        !is_string($db['admin']['email']) || !is_string($db['admin']['password_hash']))
+        throw new DomainException('Резервная копия имеет неподдерживаемый формат.');
+    foreach(['settings','categories','articles','media','feedback_votes'] as $key)
+        if (!isset($db[$key]) || !is_array($db[$key]))
+            throw new DomainException('Не найден раздел резервной копии: '.$key);
+    foreach(['categories','articles','media'] as $key)
+        if (!array_is_list($db[$key]))
+            throw new DomainException('Список повреждён: '.$key);
+    if (count($db['categories'])>500 || count($db['articles'])>10000 || count($db['media'])>10000)
+        throw new DomainException('Слишком много записей в резервной копии.');
+
+    $settings=$db['settings'];
+    foreach(['site_title','site_subtitle','hero_title','hero_description','footer_text',
+             'vk_url','telegram_url','site_url','forum_url','support_email'] as $key)
+        if (!isset($settings[$key]) || !is_string($settings[$key]))
+            throw new DomainException('Некорректная настройка в резервной копии: '.$key);
+    if (!isset($settings['maintenance']) || !is_bool($settings['maintenance']))
+        throw new DomainException('Некорректный режим обслуживания в резервной копии.');
+    foreach(['vk_url','telegram_url','site_url','forum_url'] as $key)
+        if ($settings[$key]!=='' && safe_external_url($settings[$key])!==$settings[$key])
+            throw new DomainException('Недопустимая ссылка в резервной копии: '.$key);
+    if ($settings['support_email']!=='' && !filter_var($settings['support_email'],FILTER_VALIDATE_EMAIL))
+        throw new DomainException('Недопустимый email в резервной копии.');
+
+    $categoryIds=[]; $categorySlugs=[];
+    foreach($db['categories'] as $category) {
+        if (!is_array($category) || !isset($category['id'],$category['slug'],$category['name'],
+            $category['description'],$category['icon'],$category['sort']) ||
+            !is_int($category['id']) || $category['id']<=0 ||
+            !is_string($category['slug']) || !preg_match('/^[a-z0-9-]{1,90}$/D',$category['slug']) ||
+            !is_string($category['name']) || !is_string($category['description']) ||
+            !is_string($category['icon']) || !is_int($category['sort']) ||
+            isset($categoryIds[$category['id']]) || isset($categorySlugs[$category['slug']]))
+            throw new DomainException('Повреждён список категорий в резервной копии.');
+        $categoryIds[$category['id']]=true;
+        $categorySlugs[$category['slug']]=true;
+    }
+
+    $articleIds=[]; $articleSlugs=[];
+    foreach($db['articles'] as $article) {
+        if (!is_array($article) || !isset($article['id'],$article['category_id'],$article['slug'],
+            $article['title'],$article['summary'],$article['content'],$article['status'],
+            $article['featured'],$article['views'],$article['helpful'],$article['unhelpful'],
+            $article['created_at'],$article['updated_at']) ||
+            !is_int($article['id']) || $article['id']<=0 ||
+            !is_int($article['category_id']) || !isset($categoryIds[$article['category_id']]) ||
+            !is_string($article['slug']) || !preg_match('/^[a-z0-9-]{1,90}$/D',$article['slug']) ||
+            !is_string($article['title']) || !is_string($article['summary']) ||
+            !is_string($article['content']) || !is_string($article['created_at']) ||
+            !is_string($article['updated_at']) ||
+            !in_array($article['status'],['draft','published'],true) ||
+            !is_bool($article['featured']) ||
+            !is_int($article['views']) || $article['views']<0 ||
+            !is_int($article['helpful']) || $article['helpful']<0 ||
+            !is_int($article['unhelpful']) || $article['unhelpful']<0 ||
+            isset($articleIds[$article['id']]) || isset($articleSlugs[$article['slug']]))
+            throw new DomainException('Повреждены статьи или связи с категориями.');
+        $articleIds[$article['id']]=true;
+        $articleSlugs[$article['slug']]=true;
+    }
+
+    $mediaIds=[]; $mediaNames=[];
+    foreach($db['media'] as $item) {
+        if (!is_array($item) || !isset($item['id'],$item['filename'],$item['title'],$item['created_at']) ||
+            !is_int($item['id']) || $item['id']<=0 ||
+            !is_string($item['filename']) || !preg_match('/^[a-f0-9]{32}\.(?:jpg|png|webp)$/D',$item['filename']) ||
+            !is_string($item['title']) || !is_string($item['created_at']) ||
+            isset($mediaIds[$item['id']]) || isset($mediaNames[$item['filename']]))
+            throw new DomainException('Повреждена медиатека в резервной копии.');
+        $mediaIds[$item['id']]=true;
+        $mediaNames[$item['filename']]=true;
+    }
+    return $db;
+}
+
+/**
+ * Restores editorial content and settings, preserving the current admin login.
+ * A private, mode-0600 safety snapshot of the previous database is written
+ * before the content is replaced under the same exclusive file lock.
+ */
+function wiki_restore_from_json(string $json,string $currentPassword): string {
+    $backup=wiki_validate_restore_json($json);
+    if ($currentPassword==='')throw new DomainException('Укажите текущий пароль администратора.');
+    return wiki_admin_change(function (&$current)use($backup,$currentPassword):string {
+        if (!password_verify($currentPassword,(string)($current['admin']['password_hash']??'')))
+            throw new DomainException('Неверный текущий пароль администратора.');
+        $filename='.wiki-before-restore-'.gmdate('Ymd-His').'-'.bin2hex(random_bytes(6)).'.json';
+        $path=WIKI_STORE_DIR.'/'.$filename;
+        $old=json_encode($current,JSON_PRETTY_PRINT|JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)."\n";
+        $handle=@fopen($path,'x');
+        if ($handle===false)throw new RuntimeException('Не удалось сохранить копию перед восстановлением.');
+        try {
+            @chmod($path,0600);
+            $total=0;$length=strlen($old);
+            while($total<$length) {
+                $written=@fwrite($handle,substr($old,$total));
+                if ($written===false || $written===0)throw new RuntimeException('Не удалось полностью сохранить предыдущую базу.');
+                $total+=$written;
+            }
+            if (!fflush($handle))throw new RuntimeException('Не удалось завершить сохранение предыдущей базы.');
+            fclose($handle);
+        } catch(Throwable $error) {
+            fclose($handle);
+            @unlink($path);
+            throw $error;
+        }
+        foreach(['settings','categories','articles','media','feedback_votes'] as $field)
+            $current[$field]=$backup[$field];
+        return $filename;
+    });
+}
 function wiki_start_session(): void {
     if (session_status() === PHP_SESSION_ACTIVE) return;
     $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';

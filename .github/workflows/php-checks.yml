@@ -36,6 +36,8 @@ jobs:
         run: php tools/test-wiki-admin-auth.php
       - name: Test Wiki uploads and atomic storage writes
         run: php tools/test-wiki-media-storage.php
+      - name: Test Wiki backup restore and rollback snapshots
+        run: php tools/test-wiki-restore.php
       - name: Test external site storage
         run: php tools/test-site-storage.php
       - name: Test atomic site writes and POST length limit
